@@ -9,6 +9,7 @@ cleanly during a hackathon without dependency installation.
 from __future__ import annotations
 
 import argparse
+import re
 import json
 from dataclasses import dataclass, asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -47,6 +48,23 @@ class Investigation:
         return output
 
 
+@dataclass
+class DeviceAssessment:
+    session_id: str
+    risk_score: int
+    confidence: float
+    decision: str
+    resolution: list[str]
+    signals: list[Signal]
+    evidence_brief: str
+    ui_context: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        output = asdict(self)
+        output["signals"] = [asdict(signal) for signal in self.signals]
+        return output
+
+
 class KosongPhucsAgent:
     def __init__(self, cases: list[dict[str, Any]]):
         self.cases = {case["id"]: case for case in cases}
@@ -75,6 +93,26 @@ class KosongPhucsAgent:
 
     def investigate_all(self) -> list[Investigation]:
         return [self.investigate(case_id) for case_id in sorted(self.cases)]
+
+    def assess_device_ui(self, payload: dict[str, Any]) -> DeviceAssessment:
+        context = normalize_device_payload(payload)
+        signals = self._collect_device_signals(context)
+        risk_score = max(0, min(100, sum(signal.weight for signal in signals)))
+        confidence = self._device_confidence(signals, context)
+        decision = self._device_decision(risk_score, confidence, signals)
+        resolution = self._device_resolution(decision, signals)
+        evidence_brief = self._device_brief(context, risk_score, confidence, decision, signals)
+
+        return DeviceAssessment(
+            session_id=context["session_id"],
+            risk_score=risk_score,
+            confidence=confidence,
+            decision=decision,
+            resolution=resolution,
+            signals=signals,
+            evidence_brief=evidence_brief,
+            ui_context=context,
+        )
 
     def _collect_signals(self, case: dict[str, Any]) -> list[Signal]:
         signals: list[Signal] = []
@@ -209,6 +247,119 @@ class KosongPhucsAgent:
 
         return signals
 
+    def _collect_device_signals(self, context: dict[str, Any]) -> list[Signal]:
+        signals: list[Signal] = []
+        text = context["text"].lower()
+        url = context["current_url"].lower()
+        app = context["app_name"].lower()
+        events = {event.lower() for event in context["recent_events"]}
+
+        if contains_any(text, ["whatsapp", "telegram", "line", "dm me", "message seller"]) and contains_any(text, ["pay", "transfer", "deposit"]):
+            signals.append(Signal(
+                "Off-platform payment pressure",
+                27,
+                "UI text asks the buyer to continue payment or coordination in a messaging channel.",
+                "Social-commerce scam",
+            ))
+
+        if contains_any(text, ["bank transfer", "paynow", "duitnow", "gcash", "maya", "ovo", "dana", "shopeepay", "qr payment"]):
+            signals.append(Signal(
+                "Local instant-payment rail requested",
+                18,
+                "The screen requests a regional instant transfer method with weak buyer protection.",
+                "Authorized push payment scam",
+            ))
+
+        if contains_any(text, ["urgent", "limited time", "last chance", "pay now", "within 10 minutes", "release order"]):
+            signals.append(Signal(
+                "Urgency language",
+                14,
+                "Visible copy pressures the user to act quickly before verifying the counterparty.",
+                "Social engineering",
+            ))
+
+        if contains_any(text, ["otp", "one-time password", "verification code", "share code", "send me the code"]):
+            signals.append(Signal(
+                "OTP sharing request",
+                32,
+                "The UI or chat asks for an OTP or verification code.",
+                "Account takeover",
+            ))
+
+        if contains_any(text, ["refund fee", "unlock fee", "customs fee", "insurance fee", "processing fee", "deposit first"]):
+            signals.append(Signal(
+                "Advance-fee language",
+                24,
+                "The screen asks for a fee or deposit before refund, delivery, or release.",
+                "Advance-fee scam",
+            ))
+
+        if re.search(r"https?://[^\s]+", text) and contains_any(text, ["login", "verify", "claim", "refund", "wallet"]):
+            signals.append(Signal(
+                "Suspicious verification link",
+                22,
+                "A link is paired with login, claim, refund, wallet, or verification language.",
+                "Phishing",
+            ))
+
+        if url and not trusted_url(url):
+            signals.append(Signal(
+                "Untrusted commerce URL",
+                16,
+                f"Current URL is outside known marketplace or payment domains: {context['current_url']}.",
+                "Phishing or fake storefront",
+            ))
+
+        if context["payment_amount_usd"] >= 500 and contains_any(text, ["transfer", "wallet", "qr", "paynow", "duitnow", "gcash"]):
+            signals.append(Signal(
+                "High-value irreversible payment",
+                16,
+                f"Payment amount is ${context['payment_amount_usd']} on an instant-transfer-like flow.",
+                "Payment method abuse",
+            ))
+
+        if "new_device_login" in events:
+            signals.append(Signal(
+                "New device login event",
+                13,
+                "Device telemetry reports a new login shortly before the UI action.",
+                "Account takeover",
+            ))
+
+        if "password_reset" in events or "phone_changed" in events:
+            signals.append(Signal(
+                "Recent account recovery event",
+                17,
+                "Recent password reset or phone change appears before the payment flow.",
+                "SIM swap or account takeover",
+            ))
+
+        if app in {"whatsapp", "telegram", "line", "facebook marketplace", "instagram"} and contains_any(text, ["seller", "courier", "agent", "payment", "deposit"]):
+            signals.append(Signal(
+                "High-risk chat commerce surface",
+                15,
+                f"The active app is {context['app_name']}, where marketplace protections may not apply.",
+                "Social-commerce scam",
+            ))
+
+        if contains_any(text, ["official store", "platform guarantee", "buyer protection"]) and not contains_any(text, ["transfer outside", "whatsapp", "telegram", "otp"]):
+            signals.append(Signal(
+                "Buyer-protection cues",
+                -8,
+                "The UI keeps the user inside a protected marketplace or official checkout flow.",
+                "Lower risk",
+            ))
+
+        if not signals:
+            signals.append(Signal(
+                "No scam language detected",
+                -6,
+                "Visible UI and device context do not contain known high-risk scam patterns.",
+                "Low risk",
+            ))
+
+        return signals
+
     def _edge_reasons(self, case: dict[str, Any], signals: list[Signal], risk_score: int) -> list[str]:
         reasons: list[str] = []
         if case["customer_tier"] == "vip" and risk_score >= 35:
@@ -288,6 +439,71 @@ class KosongPhucsAgent:
             f"Key evidence: {signal_text}.{edge_text}"
         )
 
+    def _device_confidence(self, signals: list[Signal], context: dict[str, Any]) -> float:
+        corroboration = len([signal for signal in signals if signal.weight > 0])
+        confidence = 0.48 + min(corroboration * 0.08, 0.36)
+        if any(signal.weight >= 30 for signal in signals):
+            confidence += 0.08
+        if context["text_length"] < 40:
+            confidence -= 0.12
+        if context["current_url"]:
+            confidence += 0.04
+        return round(max(0.35, min(confidence, 0.96)), 2)
+
+    def _device_decision(self, risk_score: int, confidence: float, signals: list[Signal]) -> str:
+        patterns = {signal.pattern for signal in signals if signal.weight > 0}
+        if "Account takeover" in patterns and risk_score >= 55:
+            return "freeze_session"
+        if risk_score >= 75 and confidence >= 0.72:
+            return "block_payment"
+        if risk_score >= 45:
+            return "warn_and_step_up"
+        if risk_score >= 25:
+            return "monitor"
+        return "allow"
+
+    def _device_resolution(self, decision: str, signals: list[Signal]) -> list[str]:
+        if decision == "block_payment":
+            return [
+                "Block the payment button before funds leave the protected flow",
+                "Show the user a scam warning with the top evidence",
+                "Create a fraud case with UI text, URL, app, and device events",
+            ]
+        if decision == "freeze_session":
+            return [
+                "Freeze checkout and revoke risky session tokens",
+                "Require password reset and fresh MFA from a trusted device",
+                "Preserve OTP, URL, and device evidence for fraud operations",
+            ]
+        if decision == "warn_and_step_up":
+            return [
+                "Warn the user before payment",
+                "Require confirmation that payment stays inside the platform",
+                "Escalate automatically if the user proceeds to off-platform transfer",
+            ]
+        if decision == "monitor":
+            return [
+                "Allow the interaction but increase telemetry sampling",
+                "Watch for OTP, link-click, or off-platform payment transitions",
+            ]
+        return ["Allow flow", "Keep normal passive monitoring active"]
+
+    def _device_brief(
+        self,
+        context: dict[str, Any],
+        risk_score: int,
+        confidence: float,
+        decision: str,
+        signals: list[Signal],
+    ) -> str:
+        top_signals = sorted(signals, key=lambda signal: signal.weight, reverse=True)[:3]
+        signal_text = "; ".join(f"{signal.name}: {signal.evidence}" for signal in top_signals)
+        return (
+            f"kosong_phucs assessed device session {context['session_id']} as "
+            f"{risk_score}/100 UI scam risk with {int(confidence * 100)}% confidence "
+            f"and decision {decision}. Key evidence: {signal_text}."
+        )
+
 
 def recent(hours: Any, window: int) -> bool:
     return hours is not None and hours <= window
@@ -295,6 +511,71 @@ def recent(hours: Any, window: int) -> bool:
 
 def load_cases() -> list[dict[str, Any]]:
     return json.loads(CASE_FILE.read_text(encoding="utf-8"))
+
+
+def normalize_device_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    messages = payload.get("messages", [])
+    if isinstance(messages, list):
+        message_text = "\n".join(str(message) for message in messages)
+    else:
+        message_text = str(messages)
+
+    recent_events = payload.get("recent_events", [])
+    if not isinstance(recent_events, list):
+        recent_events = [str(recent_events)]
+
+    ui_text = "\n".join([
+        str(payload.get("ui_text", "")),
+        message_text,
+        str(payload.get("ocr_text", "")),
+    ]).strip()
+
+    return {
+        "session_id": str(payload.get("session_id") or "DEVICE-DEMO-001"),
+        "app_name": str(payload.get("app_name") or "unknown"),
+        "current_url": str(payload.get("current_url") or ""),
+        "country": str(payload.get("country") or "SG"),
+        "payment_amount_usd": int(payload.get("payment_amount_usd") or 0),
+        "recent_events": [str(event) for event in recent_events],
+        "text": ui_text,
+        "text_length": len(ui_text),
+    }
+
+
+def contains_any(text: str, needles: list[str]) -> bool:
+    return any(needle in text for needle in needles)
+
+
+def trusted_url(url: str) -> bool:
+    trusted_domains = [
+        "amazon.",
+        "lazada.",
+        "shopee.",
+        "tokopedia.",
+        "zalora.",
+        "grab.",
+        "paynow.",
+        "paypal.",
+        "stripe.",
+        "adyen.",
+    ]
+    return any(domain in url for domain in trusted_domains)
+
+
+def sample_device_payload() -> dict[str, Any]:
+    return {
+        "session_id": "DEVICE-SG-404",
+        "country": "SG",
+        "app_name": "WhatsApp",
+        "current_url": "https://sg-paynow-verify.example.com/refund",
+        "payment_amount_usd": 680,
+        "recent_events": ["new_device_login", "phone_changed"],
+        "ui_text": (
+            "Seller: Your order is held. PayNow transfer required within 10 minutes "
+            "to release order. Send me the OTP verification code after payment. "
+            "Use this refund wallet link: https://sg-paynow-verify.example.com/refund"
+        ),
+    }
 
 
 def render_dashboard() -> str:
@@ -350,6 +631,13 @@ def render_dashboard() -> str:
       grid-template-columns: minmax(250px, 340px) 1fr;
       gap: 22px;
       padding: 24px clamp(18px, 4vw, 48px);
+    }
+    .device-lab {
+      margin: 0 clamp(18px, 4vw, 48px) 28px;
+      padding: 22px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
     }
     aside, section {
       background: var(--panel);
@@ -411,9 +699,36 @@ def render_dashboard() -> str:
     .signal span { color: var(--muted); font-size: 14px; line-height: 1.45; }
     .pattern { margin-top: 10px; color: var(--blue); font-weight: 750; font-size: 13px; }
     .actions { margin: 0; padding-left: 20px; line-height: 1.7; }
+    .device-grid {
+      display: grid;
+      grid-template-columns: minmax(260px, 420px) 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+    textarea, input {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      font: inherit;
+      margin-bottom: 10px;
+      background: #fff;
+    }
+    textarea { min-height: 190px; resize: vertical; }
+    button.primary {
+      border: 0;
+      border-radius: 8px;
+      background: var(--green);
+      color: #fff;
+      padding: 11px 14px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .hint { color: var(--muted); font-size: 14px; line-height: 1.45; margin-top: 8px; }
     @media (max-width: 840px) {
       main { grid-template-columns: 1fr; }
       .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .device-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -431,6 +746,20 @@ def render_dashboard() -> str:
       <div class="content" id="detail">Loading investigations...</div>
     </section>
   </main>
+  <section class="device-lab">
+    <h2>Device UI Scam Monitor</h2>
+    <div class="device-grid">
+      <div>
+        <input id="deviceApp" value="WhatsApp" aria-label="App name">
+        <input id="deviceUrl" value="https://sg-paynow-verify.example.com/refund" aria-label="Current URL">
+        <input id="deviceAmount" value="680" aria-label="Payment amount">
+        <textarea id="deviceText" aria-label="Visible device UI text">Seller: Your order is held. PayNow transfer required within 10 minutes to release order. Send me the OTP verification code after payment. Use this refund wallet link: https://sg-paynow-verify.example.com/refund</textarea>
+        <button class="primary" id="analyzeDevice">Analyze Device UI</button>
+        <p class="hint">Simulates a mobile app, browser extension, or checkout wrapper sending visible UI text, current URL, payment amount, and device events into the agent.</p>
+      </div>
+      <div id="deviceResult" class="brief">Device assessment will appear here.</div>
+    </div>
+  </section>
   <script>
     const casesEl = document.querySelector("#cases");
     const detailEl = document.querySelector("#detail");
@@ -485,6 +814,51 @@ def render_dashboard() -> str:
       `;
     }
 
+    function renderDeviceAssessment(item) {
+      document.querySelector("#deviceResult").innerHTML = `
+        <div class="summary">
+          <div class="metric"><div class="label">UI scam risk</div><div class="value ${riskClass(item.risk_score)}">${item.risk_score}/100</div></div>
+          <div class="metric"><div class="label">Decision</div><div class="value">${decisionLabel(item.decision)}</div></div>
+          <div class="metric"><div class="label">Confidence</div><div class="value">${Math.round(item.confidence * 100)}%</div></div>
+          <div class="metric"><div class="label">Session</div><div class="value">${item.session_id}</div></div>
+        </div>
+        <div class="brief">${item.evidence_brief}</div>
+        <h2>Device Actions</h2>
+        <ul class="actions">${item.resolution.map(action => `<li>${action}</li>`).join("")}</ul>
+        <h2>Detected UI Signals</h2>
+        <div class="signals">
+          ${item.signals.sort((a, b) => b.weight - a.weight).map(signal => `
+            <div class="signal">
+              <strong>${signal.name} <span class="${riskClass(signal.weight + 40)}">+${signal.weight}</span></strong>
+              <span>${signal.evidence}</span>
+              <div class="pattern">${signal.pattern}</div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    document.querySelector("#analyzeDevice").addEventListener("click", () => {
+      fetch("/api/device-ui", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: "DEVICE-LIVE-001",
+          country: "SG",
+          app_name: document.querySelector("#deviceApp").value,
+          current_url: document.querySelector("#deviceUrl").value,
+          payment_amount_usd: Number(document.querySelector("#deviceAmount").value || 0),
+          recent_events: ["new_device_login", "phone_changed"],
+          ui_text: document.querySelector("#deviceText").value
+        })
+      })
+        .then(response => response.json())
+        .then(renderDeviceAssessment)
+        .catch(error => {
+          document.querySelector("#deviceResult").textContent = `Could not assess device UI: ${error}`;
+        });
+    });
+
     fetch("/api/batch")
       .then(response => response.json())
       .then(data => {
@@ -513,6 +887,9 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/batch":
             self._json(200, [item.to_dict() for item in self.agent.investigate_all()])
             return
+        if parsed.path == "/api/device-demo":
+            self._json(200, self.agent.assess_device_ui(sample_device_payload()).to_dict())
+            return
         if parsed.path == "/api/investigate":
             case_id = parse_qs(parsed.query).get("id", [""])[0]
             if case_id not in self.agent.cases:
@@ -521,6 +898,22 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, self.agent.investigate(case_id).to_dict())
             return
         self._json(404, {"error": "not found"})
+
+    def do_POST(self) -> None:
+        parsed = urlparse(self.path)
+        if parsed.path != "/api/device-ui":
+            self._json(404, {"error": "not found"})
+            return
+
+        length = int(self.headers.get("Content-Length", "0"))
+        raw_body = self.rfile.read(length).decode("utf-8")
+        try:
+            payload = json.loads(raw_body or "{}")
+        except json.JSONDecodeError:
+            self._json(400, {"error": "invalid json"})
+            return
+
+        self._json(200, self.agent.assess_device_ui(payload).to_dict())
 
     def log_message(self, format: str, *args: Any) -> None:
         return
@@ -548,10 +941,22 @@ def print_investigation(investigation: Investigation) -> None:
         print(f"  - +{signal.weight} {signal.name}: {signal.evidence} [{signal.pattern}]")
 
 
+def print_device_assessment(assessment: DeviceAssessment) -> None:
+    print(f"\n{assessment.session_id} | {assessment.decision} | UI scam risk {assessment.risk_score}/100 | confidence {int(assessment.confidence * 100)}%")
+    print(assessment.evidence_brief)
+    print("Device actions:")
+    for action in assessment.resolution:
+        print(f"  - {action}")
+    print("Signals:")
+    for signal in sorted(assessment.signals, key=lambda item: item.weight, reverse=True):
+        print(f"  - +{signal.weight} {signal.name}: {signal.evidence} [{signal.pattern}]")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="kosong_phucs SEA fraud investigation agent")
     parser.add_argument("--case", help="Investigate a single case id")
     parser.add_argument("--batch", action="store_true", help="Investigate all cases")
+    parser.add_argument("--device-demo", action="store_true", help="Assess a suspicious device UI scam flow")
     parser.add_argument("--serve", action="store_true", help="Run the web demo")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8787)
@@ -573,6 +978,10 @@ def main() -> None:
     if args.batch:
         for investigation in agent.investigate_all():
             print_investigation(investigation)
+        return
+
+    if args.device_demo:
+        print_device_assessment(agent.assess_device_ui(sample_device_payload()))
         return
 
     parser.print_help()

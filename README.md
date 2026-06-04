@@ -32,6 +32,12 @@ Run all sample cases:
 python .\kosong_phucs.py --batch
 ```
 
+Run the device UI scam monitor demo:
+
+```powershell
+python .\kosong_phucs.py --device-demo
+```
+
 ## Demo Story
 
 1. A case arrives from checkout, post-payment monitoring, or customer support.
@@ -40,6 +46,29 @@ python .\kosong_phucs.py --batch
 3. It maps signals to SEA-specific fraud patterns.
 4. It makes a resolution decision and produces a concise evidence brief.
 5. It escalates only edge cases with conflicting evidence, very high value, VIP sensitivity, or insufficient confidence.
+
+## Device UI Scam Monitor
+
+kosong_phucs can also act like a device-attached safety agent. A mobile app, browser extension, or checkout wrapper can send visible UI text, the active app, current URL, payment amount, and recent device events to:
+
+```text
+POST /api/device-ui
+```
+
+Example payload:
+
+```json
+{
+  "session_id": "DEVICE-SG-404",
+  "app_name": "WhatsApp",
+  "current_url": "https://sg-paynow-verify.example.com/refund",
+  "payment_amount_usd": 680,
+  "recent_events": ["new_device_login", "phone_changed"],
+  "ui_text": "PayNow transfer required within 10 minutes. Send me the OTP verification code."
+}
+```
+
+The agent detects scam patterns such as off-platform payment pressure, PayNow/DuitNow/GCash-style irreversible transfer requests, OTP sharing, suspicious refund links, urgency language, high-risk chat commerce, and account takeover events. It can return decisions like `block_payment`, `freeze_session`, `warn_and_step_up`, `monitor`, or `allow`.
 
 ## Decisions
 
