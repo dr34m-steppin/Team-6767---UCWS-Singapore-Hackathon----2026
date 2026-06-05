@@ -73,6 +73,9 @@ The agent detects scam patterns such as off-platform payment pressure, PayNow/Du
 The web dashboard now includes a **Run Scam Rescue Demo** button that shows the complete intervention story:
 
 - A live risk decision for the device session.
+- A fake phone/chat UI showing the scam pressure in context.
+- Before/after impact metrics for loss prevented and ops time saved.
+- A country selector for Singapore, Malaysia, Philippines, Indonesia, Thailand, and Vietnam.
 - A customer-safe warning that tells the user what to avoid.
 - A SEA country pattern pack for SG, MY, PH, ID, TH, and VN scam rails.
 - A rescue timeline from device event to autonomous action.

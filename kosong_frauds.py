@@ -293,7 +293,7 @@ class KosongFraudsAgent:
                 "Social-commerce scam",
             ))
 
-        if contains_any(text, ["bank transfer", "paynow", "duitnow", "gcash", "maya", "ovo", "dana", "shopeepay", "qr payment"]):
+        if contains_any(text, ["bank transfer", "paynow", "duitnow", "gcash", "maya", "ovo", "dana", "shopeepay", "qr payment", "qris", "promptpay", "momo", "zalopay", "touch n go"]):
             signals.append(Signal(
                 "Local instant-payment rail requested",
                 18,
@@ -365,7 +365,7 @@ class KosongFraudsAgent:
                 "SIM swap or account takeover",
             ))
 
-        if app in {"whatsapp", "telegram", "line", "facebook marketplace", "instagram"} and contains_any(text, ["seller", "courier", "agent", "payment", "deposit"]):
+        if app in {"whatsapp", "telegram", "line", "facebook marketplace", "instagram", "zalo"} and contains_any(text, ["seller", "courier", "agent", "payment", "deposit"]):
             signals.append(Signal(
                 "High-risk chat commerce surface",
                 15,
@@ -905,7 +905,7 @@ def render_dashboard() -> str:
       gap: 16px;
       align-items: start;
     }
-    textarea, input {
+    textarea, input, select {
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 10px;
@@ -916,7 +916,8 @@ def render_dashboard() -> str:
       color: var(--ink);
       outline: none;
     }
-    textarea:focus, input:focus { border-color: rgba(53, 224, 161, 0.68); box-shadow: 0 0 0 3px rgba(53, 224, 161, 0.12); }
+    textarea:focus, input:focus, select:focus { border-color: rgba(53, 224, 161, 0.68); box-shadow: 0 0 0 3px rgba(53, 224, 161, 0.12); }
+    select option { background: #0f172a; color: var(--ink); }
     textarea { min-height: 190px; resize: vertical; }
     button.primary {
       border: 0;
@@ -932,6 +933,46 @@ def render_dashboard() -> str:
     .button-row { display: flex; gap: 10px; flex-wrap: wrap; }
     .secondary { border: 1px solid rgba(106, 166, 255, 0.42); border-radius: 10px; background: rgba(106, 166, 255, 0.1); color: #dbeafe; padding: 12px 15px; font-weight: 900; cursor: pointer; }
     .message { border-left: 4px solid var(--red); background: rgba(255, 92, 114, 0.1); padding: 14px; border-radius: 10px; line-height: 1.55; }
+    .judge-mode {
+      display: grid;
+      grid-template-columns: minmax(260px, 360px) 1fr;
+      gap: 16px;
+      margin-bottom: 18px;
+      align-items: stretch;
+    }
+    .phone {
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      border-radius: 28px;
+      padding: 14px;
+      background: linear-gradient(180deg, #111827, #020617);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 20px 48px rgba(0, 0, 0, 0.42);
+      min-height: 520px;
+    }
+    .phone-top { display: flex; justify-content: space-between; color: #cbd5e1; font-size: 12px; padding: 4px 10px 12px; }
+    .phone-screen { border-radius: 20px; overflow: hidden; background: #07111f; min-height: 472px; border: 1px solid rgba(148, 163, 184, 0.18); }
+    .chat-head { padding: 14px; background: rgba(15, 23, 42, 0.92); border-bottom: 1px solid var(--line); }
+    .chat-title { font-weight: 900; }
+    .chat-sub { color: var(--muted); font-size: 12px; margin-top: 3px; }
+    .chat-body { padding: 14px; display: grid; gap: 10px; }
+    .bubble { padding: 12px; border-radius: 14px; line-height: 1.45; font-size: 14px; }
+    .seller { background: rgba(106, 166, 255, 0.12); border: 1px solid rgba(106, 166, 255, 0.18); }
+    .system { background: rgba(255, 92, 114, 0.12); border: 1px solid rgba(255, 92, 114, 0.24); }
+    .pay-card { margin-top: 8px; border: 1px solid rgba(53, 224, 161, 0.24); border-radius: 14px; padding: 12px; background: rgba(53, 224, 161, 0.08); }
+    .blocked-stamp { margin-top: 12px; border-radius: 12px; padding: 12px; background: rgba(255, 92, 114, 0.18); border: 1px solid rgba(255, 92, 114, 0.38); color: #ffd4da; font-weight: 900; text-align: center; }
+    .impact-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(130px, 1fr));
+      gap: 12px;
+      margin: 14px 0 18px;
+    }
+    .impact-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      background: rgba(2, 6, 23, 0.36);
+    }
+    .impact-card strong { display: block; font-size: 22px; margin-top: 5px; }
+    .demo-note { color: var(--muted); line-height: 1.55; margin: 0 0 14px; }
     .timeline { display: grid; gap: 10px; }
     .timeline-step { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: rgba(15, 23, 42, 0.66); }
     .timeline-step strong { display: block; margin-bottom: 4px; color: var(--green); }
@@ -942,6 +983,8 @@ def render_dashboard() -> str:
       main { grid-template-columns: 1fr; }
       .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .device-grid { grid-template-columns: 1fr; }
+      .judge-mode { grid-template-columns: 1fr; }
+      .impact-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
   </style>
 </head>
@@ -960,11 +1003,43 @@ def render_dashboard() -> str:
     </section>
   </main>
   <section class="device-lab">
-    <h2>Device UI Scam Monitor</h2>
-    <div class="device-grid">
+    <h2>Judge Demo Mode: Scam Rescue</h2>
+    <p class="demo-note">Run a live-looking device intervention: the user is pushed into an irreversible local payment, Kosong Frauds detects the scam, blocks the payment, warns the customer, and creates an ops packet.</p>
+    <div class="judge-mode">
+      <div class="phone" aria-label="Simulated phone UI">
+        <div class="phone-top"><span>9:41</span><span id="phoneCountry">SG</span></div>
+        <div class="phone-screen">
+          <div class="chat-head">
+            <div class="chat-title" id="phoneApp">WhatsApp</div>
+            <div class="chat-sub">Marketplace seller chat</div>
+          </div>
+          <div class="chat-body">
+            <div class="bubble seller" id="phoneText">Seller: Your order is held. PayNow transfer required within 10 minutes to release order. Send me the OTP verification code after payment.</div>
+            <div class="pay-card">
+              <div class="label">Payment request</div>
+              <div class="value" id="phoneAmount">$680</div>
+              <div class="case-meta" id="phoneUrl">sg-paynow-verify.example.com/refund</div>
+            </div>
+            <div class="blocked-stamp" id="phoneStatus">Awaiting agent decision</div>
+          </div>
+        </div>
+      </div>
       <div>
+        <div class="impact-grid" id="impactGrid">
+          <div class="impact-card"><span class="label">Without agent</span><strong class="risk-high">$680 lost</strong></div>
+          <div class="impact-card"><span class="label">With agent</span><strong class="risk-low">$680 saved</strong></div>
+          <div class="impact-card"><span class="label">Ops time</span><strong>18 min saved</strong></div>
+          <div class="impact-card"><span class="label">Escalation</span><strong>Not needed</strong></div>
+        </div>
         <input id="deviceApp" value="WhatsApp" aria-label="App name">
-        <input id="deviceCountry" value="SG" aria-label="Country code">
+        <select id="deviceCountry" aria-label="Country code">
+          <option value="SG">Singapore: PayNow / Singpass</option>
+          <option value="MY">Malaysia: DuitNow / mule account</option>
+          <option value="PH">Philippines: GCash / Maya</option>
+          <option value="ID">Indonesia: QRIS / OVO / DANA</option>
+          <option value="TH">Thailand: PromptPay</option>
+          <option value="VN">Vietnam: MoMo / ZaloPay</option>
+        </select>
         <input id="deviceUrl" value="https://sg-paynow-verify.example.com/refund" aria-label="Current URL">
         <input id="deviceAmount" value="680" aria-label="Payment amount">
         <textarea id="deviceText" aria-label="Visible device UI text">Seller: Your order is held. PayNow transfer required within 10 minutes to release order. Send me the OTP verification code after payment. Use this refund wallet link: https://sg-paynow-verify.example.com/refund</textarea>
@@ -974,13 +1049,75 @@ def render_dashboard() -> str:
         </div>
         <p class="hint">Simulates a mobile app, browser extension, or checkout wrapper sending visible UI text, current URL, payment amount, and device events into the agent.</p>
       </div>
-      <div id="deviceResult" class="brief">Device assessment will appear here.</div>
     </div>
+    <div id="deviceResult" class="brief">Device assessment will appear here.</div>
   </section>
   <script>
     const casesEl = document.querySelector("#cases");
     const detailEl = document.querySelector("#detail");
     let investigations = [];
+    const countryProfiles = {
+      SG: {
+        app: "WhatsApp",
+        amount: 680,
+        url: "https://sg-paynow-verify.example.com/refund",
+        rail: "PayNow",
+        loss: "$680 lost",
+        saved: "$680 saved",
+        ops: "18 min saved",
+        text: "Seller: Your order is held. PayNow transfer required within 10 minutes to release order. Send me the OTP verification code after payment. Use this refund wallet link: https://sg-paynow-verify.example.com/refund"
+      },
+      MY: {
+        app: "Telegram",
+        amount: 420,
+        url: "https://duitnow-release.example.com/verify",
+        rail: "DuitNow",
+        loss: "$420 lost",
+        saved: "$420 saved",
+        ops: "16 min saved",
+        text: "Courier agent: DuitNow transfer to this mule account is required before delivery. Pay now, then send the verification code so we can unlock your parcel."
+      },
+      PH: {
+        app: "Facebook Marketplace",
+        amount: 310,
+        url: "https://gcash-refund.example.com/wallet",
+        rail: "GCash",
+        loss: "$310 lost",
+        saved: "$310 saved",
+        ops: "14 min saved",
+        text: "Seller: Pay the GCash reservation fee now or the item goes to another buyer. Use this refund wallet link and share the OTP after payment."
+      },
+      ID: {
+        app: "WhatsApp",
+        amount: 530,
+        url: "https://qris-wallet-claim.example.com/login",
+        rail: "QRIS",
+        loss: "$530 lost",
+        saved: "$530 saved",
+        ops: "19 min saved",
+        text: "Admin: Scan this QRIS payment now to release your order. OVO or DANA accepted. Login to the refund link and send your verification code."
+      },
+      TH: {
+        app: "LINE",
+        amount: 760,
+        url: "https://promptpay-agent.example.com/refund-code",
+        rail: "PromptPay",
+        loss: "$760 lost",
+        saved: "$760 saved",
+        ops: "21 min saved",
+        text: "Delivery agent: PromptPay deposit required urgently before customs release. Send refund code and OTP within 10 minutes to avoid cancellation."
+      },
+      VN: {
+        app: "Zalo",
+        amount: 260,
+        url: "https://momo-shipping.example.com/verify",
+        rail: "MoMo",
+        loss: "$260 lost",
+        saved: "$260 saved",
+        ops: "12 min saved",
+        text: "Seller: MoMo shipping fee deposit required first. Open this verification link and share the code so ZaloPay refund can be processed."
+      }
+    };
 
     function riskClass(score) {
       if (score >= 70) return "risk-high";
@@ -990,6 +1127,57 @@ def render_dashboard() -> str:
 
     function decisionLabel(value) {
       return value.split("_").map(word => word[0].toUpperCase() + word.slice(1)).join(" ");
+    }
+
+    function selectedProfile() {
+      const country = document.querySelector("#deviceCountry").value || "SG";
+      return { country, ...countryProfiles[country] };
+    }
+
+    function updatePhone(statusText = "Awaiting agent decision", blocked = false) {
+      const profile = selectedProfile();
+      document.querySelector("#phoneCountry").textContent = profile.country;
+      document.querySelector("#phoneApp").textContent = profile.app;
+      document.querySelector("#phoneText").textContent = profile.text;
+      document.querySelector("#phoneAmount").textContent = `$${profile.amount}`;
+      document.querySelector("#phoneUrl").textContent = profile.url.replace("https://", "");
+      const status = document.querySelector("#phoneStatus");
+      status.textContent = statusText;
+      status.style.borderColor = blocked ? "rgba(255, 92, 114, 0.48)" : "rgba(53, 224, 161, 0.34)";
+    }
+
+    function updateImpact(assessment = null) {
+      const profile = selectedProfile();
+      const decision = assessment ? decisionLabel(assessment.decision) : "Pending";
+      const escalated = assessment && assessment.decision.includes("escalate") ? "Human review" : "Not needed";
+      document.querySelector("#impactGrid").innerHTML = `
+        <div class="impact-card"><span class="label">Without agent</span><strong class="risk-high">${profile.loss}</strong></div>
+        <div class="impact-card"><span class="label">With agent</span><strong class="risk-low">${profile.saved}</strong></div>
+        <div class="impact-card"><span class="label">Ops time</span><strong>${profile.ops}</strong></div>
+        <div class="impact-card"><span class="label">Autonomous decision</span><strong>${assessment ? decision : escalated}</strong></div>
+      `;
+    }
+
+    function applyCountryProfile() {
+      const profile = selectedProfile();
+      document.querySelector("#deviceApp").value = profile.app;
+      document.querySelector("#deviceUrl").value = profile.url;
+      document.querySelector("#deviceAmount").value = profile.amount;
+      document.querySelector("#deviceText").value = profile.text;
+      updatePhone();
+      updateImpact();
+    }
+
+    function collectDevicePayload(sessionId) {
+      return {
+        session_id: sessionId,
+        country: document.querySelector("#deviceCountry").value || "SG",
+        app_name: document.querySelector("#deviceApp").value,
+        current_url: document.querySelector("#deviceUrl").value,
+        payment_amount_usd: Number(document.querySelector("#deviceAmount").value || 0),
+        recent_events: ["new_device_login", "phone_changed"],
+        ui_text: document.querySelector("#deviceText").value
+      };
     }
 
     function renderList(activeId) {
@@ -1032,6 +1220,8 @@ def render_dashboard() -> str:
     }
 
     function renderDeviceAssessment(item) {
+      updatePhone(`Blocked by Kosong Frauds: ${decisionLabel(item.decision)}`, true);
+      updateImpact(item);
       document.querySelector("#deviceResult").innerHTML = `
         <div class="summary">
           <div class="metric"><div class="label">UI scam risk</div><div class="value ${riskClass(item.risk_score)}">${item.risk_score}/100</div></div>
@@ -1069,18 +1259,11 @@ def render_dashboard() -> str:
       `;
     }
     document.querySelector("#analyzeDevice").addEventListener("click", () => {
+      updatePhone("Analyzing visible UI and device events...", false);
       fetch("/api/device-ui", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          session_id: "DEVICE-LIVE-001",
-          country: document.querySelector("#deviceCountry").value || "SG",
-          app_name: document.querySelector("#deviceApp").value,
-          current_url: document.querySelector("#deviceUrl").value,
-          payment_amount_usd: Number(document.querySelector("#deviceAmount").value || 0),
-          recent_events: ["new_device_login", "phone_changed"],
-          ui_text: document.querySelector("#deviceText").value
-        })
+        body: JSON.stringify(collectDevicePayload("DEVICE-LIVE-001"))
       })
         .then(response => response.json())
         .then(renderDeviceAssessment)
@@ -1090,13 +1273,22 @@ def render_dashboard() -> str:
     });
 
     document.querySelector("#runRescueDemo").addEventListener("click", () => {
-      fetch("/api/device-demo")
+      applyCountryProfile();
+      updatePhone("Scam pressure detected. Running autonomous rescue...", false);
+      fetch("/api/device-ui", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(collectDevicePayload(`DEVICE-${document.querySelector("#deviceCountry").value}-RESCUE`))
+      })
         .then(response => response.json())
         .then(renderDeviceAssessment)
         .catch(error => {
           document.querySelector("#deviceResult").textContent = `Could not run rescue demo: ${error}`;
         });
     });
+
+    document.querySelector("#deviceCountry").addEventListener("change", applyCountryProfile);
+    applyCountryProfile();
     fetch("/api/batch")
       .then(response => response.json())
       .then(data => {
@@ -1238,6 +1430,10 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+
+
 
 
 
