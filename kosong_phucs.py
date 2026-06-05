@@ -760,44 +760,64 @@ def render_dashboard() -> str:
   <title>kosong_phucs Fraud Agent</title>
   <style>
     :root {
-      color-scheme: light;
-      --ink: #17211c;
-      --muted: #66736d;
-      --line: #d9e1dc;
-      --bg: #f6f8f5;
-      --panel: #ffffff;
-      --green: #117a4f;
-      --amber: #b7791f;
-      --red: #b42318;
-      --blue: #2563eb;
+      color-scheme: dark;
+      --ink: #f3f7fb;
+      --muted: #9aa7b6;
+      --line: rgba(148, 163, 184, 0.22);
+      --bg: #070b12;
+      --panel: rgba(15, 23, 42, 0.86);
+      --panel-strong: rgba(20, 30, 49, 0.96);
+      --green: #35e0a1;
+      --amber: #f8c35b;
+      --red: #ff5c72;
+      --blue: #6aa6ff;
+      --glow: rgba(53, 224, 161, 0.18);
+      --shadow: 0 18px 48px rgba(0, 0, 0, 0.36);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       color: var(--ink);
-      background: var(--bg);
+      background:
+        radial-gradient(circle at top left, rgba(53, 224, 161, 0.16), transparent 34%),
+        radial-gradient(circle at 80% 12%, rgba(106, 166, 255, 0.16), transparent 30%),
+        linear-gradient(145deg, #070b12 0%, #0b1020 48%, #111827 100%);
+      min-height: 100vh;
     }
     header {
-      padding: 28px clamp(18px, 4vw, 48px);
-      background: #fff;
+      padding: 30px clamp(18px, 4vw, 48px);
+      background: rgba(7, 11, 18, 0.76);
       border-bottom: 1px solid var(--line);
       display: flex;
       justify-content: space-between;
       gap: 20px;
       align-items: center;
       flex-wrap: wrap;
+      backdrop-filter: blur(18px);
+      position: sticky;
+      top: 0;
+      z-index: 5;
     }
-    h1 { margin: 0; font-size: clamp(28px, 4vw, 46px); line-height: 1; }
-    .tagline { margin: 10px 0 0; color: var(--muted); max-width: 760px; }
+    h1 {
+      margin: 0;
+      font-size: clamp(30px, 4vw, 52px);
+      line-height: 1;
+      letter-spacing: 0;
+      background: linear-gradient(90deg, #ffffff, #9ff7d7 56%, #8fbaff);
+      -webkit-background-clip: text;
+      color: transparent;
+    }
+    .tagline { margin: 10px 0 0; color: var(--muted); max-width: 820px; line-height: 1.55; }
     .badge {
-      border: 1px solid var(--line);
-      background: #f9fbfa;
+      border: 1px solid rgba(53, 224, 161, 0.36);
+      background: rgba(53, 224, 161, 0.1);
       border-radius: 999px;
-      padding: 8px 12px;
-      font-weight: 700;
+      padding: 9px 13px;
+      font-weight: 800;
       color: var(--green);
       white-space: nowrap;
+      box-shadow: 0 0 28px var(--glow);
     }
     main {
       display: grid;
@@ -806,17 +826,21 @@ def render_dashboard() -> str:
       padding: 24px clamp(18px, 4vw, 48px);
     }
     .device-lab {
-      margin: 0 clamp(18px, 4vw, 48px) 28px;
+      margin: 0 clamp(18px, 4vw, 48px) 32px;
       padding: 22px;
       background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(16px);
     }
     aside, section {
       background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 12px;
       min-width: 0;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(16px);
     }
     aside { overflow: hidden; }
     .case-button {
@@ -825,12 +849,14 @@ def render_dashboard() -> str:
       text-align: left;
       border: 0;
       border-bottom: 1px solid var(--line);
-      background: #fff;
+      background: transparent;
       cursor: pointer;
       color: var(--ink);
+      transition: background 160ms ease, transform 160ms ease;
     }
-    .case-button:hover, .case-button.active { background: #eef7f1; }
-    .case-id { font-weight: 800; display: block; }
+    .case-button:hover, .case-button.active { background: rgba(53, 224, 161, 0.1); }
+    .case-button:hover { transform: translateX(2px); }
+    .case-id { font-weight: 850; display: block; }
     .case-meta { color: var(--muted); display: block; margin-top: 4px; }
     .content { padding: 22px; }
     .summary {
@@ -841,23 +867,23 @@ def render_dashboard() -> str:
     }
     .metric {
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 10px;
       padding: 14px;
-      background: #fbfcfb;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.025));
     }
-    .label { color: var(--muted); font-size: 13px; }
-    .value { font-size: 22px; font-weight: 850; margin-top: 6px; overflow-wrap: anywhere; }
+    .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+    .value { font-size: 22px; font-weight: 900; margin-top: 6px; overflow-wrap: anywhere; }
     .risk-low { color: var(--green); }
     .risk-mid { color: var(--amber); }
     .risk-high { color: var(--red); }
     .brief {
       padding: 16px;
-      background: #f6f8f5;
+      background: rgba(15, 23, 42, 0.72);
       border: 1px solid var(--line);
-      border-radius: 8px;
-      line-height: 1.5;
+      border-radius: 10px;
+      line-height: 1.55;
     }
-    h2 { margin: 22px 0 10px; font-size: 18px; }
+    h2 { margin: 24px 0 10px; font-size: 17px; letter-spacing: 0; }
     .signals {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
@@ -865,13 +891,14 @@ def render_dashboard() -> str:
     }
     .signal {
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 10px;
       padding: 14px;
+      background: rgba(2, 6, 23, 0.36);
     }
     .signal strong { display: block; margin-bottom: 6px; }
     .signal span { color: var(--muted); font-size: 14px; line-height: 1.45; }
-    .pattern { margin-top: 10px; color: var(--blue); font-weight: 750; font-size: 13px; }
-    .actions { margin: 0; padding-left: 20px; line-height: 1.7; }
+    .pattern { margin-top: 10px; color: var(--blue); font-weight: 800; font-size: 13px; }
+    .actions { margin: 0; padding-left: 20px; line-height: 1.7; color: #d8e2ee; }
     .device-grid {
       display: grid;
       grid-template-columns: minmax(260px, 420px) 1fr;
@@ -881,32 +908,37 @@ def render_dashboard() -> str:
     textarea, input {
       width: 100%;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 10px;
       padding: 12px;
       font: inherit;
       margin-bottom: 10px;
-      background: #fff;
+      background: rgba(2, 6, 23, 0.56);
+      color: var(--ink);
+      outline: none;
     }
+    textarea:focus, input:focus { border-color: rgba(53, 224, 161, 0.68); box-shadow: 0 0 0 3px rgba(53, 224, 161, 0.12); }
     textarea { min-height: 190px; resize: vertical; }
     button.primary {
       border: 0;
-      border-radius: 8px;
-      background: var(--green);
-      color: #fff;
-      padding: 11px 14px;
-      font-weight: 800;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #21c98b, #4ee7b0);
+      color: #03120c;
+      padding: 12px 15px;
+      font-weight: 900;
       cursor: pointer;
+      box-shadow: 0 12px 30px rgba(53, 224, 161, 0.18);
     }
     .hint { color: var(--muted); font-size: 14px; line-height: 1.45; margin-top: 8px; }
     .button-row { display: flex; gap: 10px; flex-wrap: wrap; }
-    .secondary { border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); padding: 11px 14px; font-weight: 800; cursor: pointer; }
-    .message { border-left: 4px solid var(--red); background: #fff7f6; padding: 14px; border-radius: 8px; line-height: 1.5; }
+    .secondary { border: 1px solid rgba(106, 166, 255, 0.42); border-radius: 10px; background: rgba(106, 166, 255, 0.1); color: #dbeafe; padding: 12px 15px; font-weight: 900; cursor: pointer; }
+    .message { border-left: 4px solid var(--red); background: rgba(255, 92, 114, 0.1); padding: 14px; border-radius: 10px; line-height: 1.55; }
     .timeline { display: grid; gap: 10px; }
-    .timeline-step { border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: #fbfcfb; }
-    .timeline-step strong { display: block; margin-bottom: 4px; }
+    .timeline-step { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: rgba(15, 23, 42, 0.66); }
+    .timeline-step strong { display: block; margin-bottom: 4px; color: var(--green); }
     .packet { display: grid; gap: 8px; }
     .packet-row { border-bottom: 1px solid var(--line); padding-bottom: 8px; line-height: 1.45; }
     @media (max-width: 840px) {
+      header { position: static; }
       main { grid-template-columns: 1fr; }
       .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .device-grid { grid-template-columns: 1fr; }
@@ -1206,6 +1238,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
 
 
