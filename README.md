@@ -97,6 +97,5 @@ The web dashboard now includes a **Run Scam Rescue Demo** button that shows the 
 ## Files
 
 - `kosong_frauds.py`: agent, CLI, HTTP API, and web UI.
-- `kosong_phucs.py`: backward-compatible wrapper for the previous script name.
 - `data/cases.json`: sample SEA e-commerce fraud scenarios.
 
