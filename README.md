@@ -1,6 +1,6 @@
 # Kosong Frauds
 
-Autonomous SEA e-commerce fraud detection and resolution agent for the Epic Connector hackathon.
+Autonomous SEA e-commerce fraud detection and resolution agent.
 
 Kosong Frauds investigates suspicious orders, gathers evidence across account, payment, device, logistics, and marketplace signals, then decides whether to approve, hold, cancel, refund, or escalate. The demo is dependency-free and runs with standard Python.
 
@@ -38,7 +38,7 @@ Run the device UI scam monitor demo:
 python .\kosong_frauds.py --device-demo
 ```
 
-## Demo Story
+## Example Scenario
 
 1. A case arrives from checkout, post-payment monitoring, or customer support.
 2. Kosong Frauds gathers evidence from simulated commerce systems:
@@ -78,7 +78,7 @@ The web dashboard now includes a **Run Scam Rescue Demo** button that shows the 
 - A rescue timeline from device event to autonomous action.
 - A human escalation packet with reviewer question and top evidence.
 
-## Hackathon Highlights
+## Features
 
 - **Autonomous action:** blocks payment or freezes session when scam evidence is strong.
 - **Explainable evidence:** every decision includes weighted signals and pattern labels.
