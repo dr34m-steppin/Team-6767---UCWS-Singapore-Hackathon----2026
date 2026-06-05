@@ -1,12 +1,12 @@
-# kosong_phucs Hackathon Pitch
+# Kosong Frauds Hackathon Pitch
 
 ## One-Liner
 
-kosong_phucs is an autonomous SEA e-commerce fraud agent that investigates suspicious orders, explains the evidence, resolves clear cases, and escalates only true edge cases.
+Kosong Frauds is an autonomous SEA e-commerce fraud agent that investigates suspicious orders, explains the evidence, resolves clear cases, and escalates only true edge cases.
 
 ## Catchy Name
 
-**kosong_phucs**: memorable, local-sounding, and cheeky enough for a hackathon demo while still pointing at fraud cases where the correct resolution is often "zero tolerance, zero payout."
+**Kosong Frauds**: memorable, local-sounding, and instantly tied to the mission: reduce scam losses to zero.
 
 ## Problem
 
@@ -14,7 +14,7 @@ SEA commerce fraud is not just stolen cards. Operators deal with account takeove
 
 ## Solution
 
-kosong_phucs performs an autonomous investigation:
+Kosong Frauds performs an autonomous investigation:
 
 1. Gathers evidence from account, payment, device, address, logistics, marketplace, and support signals.
 2. Maps those signals to SEA-specific fraud patterns.

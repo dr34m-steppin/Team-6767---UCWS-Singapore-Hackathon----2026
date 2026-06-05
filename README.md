@@ -1,17 +1,17 @@
-# kosong_phucs
+# Kosong Frauds
 
 Autonomous SEA e-commerce fraud detection and resolution agent for the Epic Connector hackathon.
 
-kosong_phucs investigates suspicious orders, gathers evidence across account, payment, device, logistics, and marketplace signals, then decides whether to approve, hold, cancel, refund, or escalate. The demo is dependency-free and runs with standard Python.
+Kosong Frauds investigates suspicious orders, gathers evidence across account, payment, device, logistics, and marketplace signals, then decides whether to approve, hold, cancel, refund, or escalate. The demo is dependency-free and runs with standard Python.
 
 ## Why This Agent
 
-Fraud in SEA commerce often blends payment abuse, account takeover, voucher farming, mule addresses, COD manipulation, and social-commerce scam behavior. kosong_phucs focuses on those regional patterns instead of generic card-fraud rules.
+Fraud in SEA commerce often blends payment abuse, account takeover, voucher farming, mule addresses, COD manipulation, and social-commerce scam behavior. Kosong Frauds focuses on those regional patterns instead of generic card-fraud rules.
 
 ## Run
 
 ```powershell
-python .\kosong_phucs.py --serve
+python .\kosong_frauds.py --serve
 ```
 
 Then open:
@@ -23,25 +23,25 @@ http://127.0.0.1:8787
 Run one investigation in the terminal:
 
 ```powershell
-python .\kosong_phucs.py --case SG-1024
+python .\kosong_frauds.py --case SG-1024
 ```
 
 Run all sample cases:
 
 ```powershell
-python .\kosong_phucs.py --batch
+python .\kosong_frauds.py --batch
 ```
 
 Run the device UI scam monitor demo:
 
 ```powershell
-python .\kosong_phucs.py --device-demo
+python .\kosong_frauds.py --device-demo
 ```
 
 ## Demo Story
 
 1. A case arrives from checkout, post-payment monitoring, or customer support.
-2. kosong_phucs gathers evidence from simulated commerce systems:
+2. Kosong Frauds gathers evidence from simulated commerce systems:
    account history, login events, payment behavior, device reputation, address reuse, shipment risk, promo behavior, and support notes.
 3. It maps signals to SEA-specific fraud patterns.
 4. It makes a resolution decision and produces a concise evidence brief.
@@ -49,7 +49,7 @@ python .\kosong_phucs.py --device-demo
 
 ## Device UI Scam Monitor
 
-kosong_phucs can also act like a device-attached safety agent. A mobile app, browser extension, or checkout wrapper can send visible UI text, the active app, current URL, payment amount, and recent device events to:
+Kosong Frauds can also act like a device-attached safety agent. A mobile app, browser extension, or checkout wrapper can send visible UI text, the active app, current URL, payment amount, and recent device events to:
 
 ```text
 POST /api/device-ui
@@ -96,6 +96,7 @@ The web dashboard now includes a **Run Scam Rescue Demo** button that shows the 
 
 ## Files
 
-- `kosong_phucs.py`: agent, CLI, HTTP API, and web UI.
+- `kosong_frauds.py`: agent, CLI, HTTP API, and web UI.
+- `kosong_phucs.py`: backward-compatible wrapper for the previous script name.
 - `data/cases.json`: sample SEA e-commerce fraud scenarios.
 
