@@ -70,6 +70,22 @@ Example payload:
 
 The agent detects scam patterns such as off-platform payment pressure, PayNow/DuitNow/GCash-style irreversible transfer requests, OTP sharing, suspicious refund links, urgency language, high-risk chat commerce, and account takeover events. It can return decisions like `block_payment`, `freeze_session`, `warn_and_step_up`, `monitor`, or `allow`.
 
+The web dashboard now includes a **Run Scam Rescue Demo** button that shows the complete intervention story:
+
+- A live risk decision for the device session.
+- A customer-safe warning that tells the user what to avoid.
+- A SEA country pattern pack for SG, MY, PH, ID, TH, and VN scam rails.
+- A rescue timeline from device event to autonomous action.
+- A human escalation packet with reviewer question and top evidence.
+
+## Hackathon Highlights
+
+- **Autonomous action:** blocks payment or freezes session when scam evidence is strong.
+- **Explainable evidence:** every decision includes weighted signals and pattern labels.
+- **Regional intelligence:** recognizes PayNow, DuitNow, GCash, Maya, QRIS, OVO, DANA, PromptPay, MoMo, ZaloPay, and related scam language.
+- **Human-in-the-loop only when needed:** generates a reviewer packet for sensitive or ambiguous cases.
+- **No dependency risk:** runs with standard Python for reliable live demos.
+
 ## Decisions
 
 - `approve`: risk is low, no action required.
@@ -82,3 +98,4 @@ The agent detects scam patterns such as off-platform payment pressure, PayNow/Du
 
 - `kosong_phucs.py`: agent, CLI, HTTP API, and web UI.
 - `data/cases.json`: sample SEA e-commerce fraud scenarios.
+

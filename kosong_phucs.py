@@ -57,6 +57,10 @@ class DeviceAssessment:
     resolution: list[str]
     signals: list[Signal]
     evidence_brief: str
+    timeline: list[dict[str, str]]
+    customer_message: str
+    reviewer_packet: dict[str, Any]
+    country_pack: dict[str, Any]
     ui_context: dict[str, Any]
 
     def to_dict(self) -> dict[str, Any]:
@@ -102,6 +106,10 @@ class KosongPhucsAgent:
         decision = self._device_decision(risk_score, confidence, signals)
         resolution = self._device_resolution(decision, signals)
         evidence_brief = self._device_brief(context, risk_score, confidence, decision, signals)
+        timeline = self._device_timeline(context, signals, decision)
+        customer_message = self._customer_message(decision, signals, context)
+        reviewer_packet = self._reviewer_packet(context, risk_score, confidence, decision, signals, resolution)
+        country_pack = sea_pattern_pack(context["country"])
 
         return DeviceAssessment(
             session_id=context["session_id"],
@@ -111,6 +119,10 @@ class KosongPhucsAgent:
             resolution=resolution,
             signals=signals,
             evidence_brief=evidence_brief,
+            timeline=timeline,
+            customer_message=customer_message,
+            reviewer_packet=reviewer_packet,
+            country_pack=country_pack,
             ui_context=context,
         )
 
@@ -253,6 +265,25 @@ class KosongPhucsAgent:
         url = context["current_url"].lower()
         app = context["app_name"].lower()
         events = {event.lower() for event in context["recent_events"]}
+        country_pack = sea_pattern_pack(context["country"])
+
+        matched_terms = [term for term in country_pack["payment_rails"] if term.lower() in text]
+        if matched_terms:
+            signals.append(Signal(
+                f"{country_pack['country']} payment rail match",
+                12,
+                f"Matched local payment terms: {', '.join(matched_terms)}.",
+                country_pack["primary_risk"],
+            ))
+
+        matched_scam_terms = [term for term in country_pack["scam_terms"] if term.lower() in text]
+        if matched_scam_terms:
+            signals.append(Signal(
+                f"{country_pack['country']} scam-language match",
+                10,
+                f"Matched local scam terms: {', '.join(matched_scam_terms)}.",
+                country_pack["primary_risk"],
+            ))
 
         if contains_any(text, ["whatsapp", "telegram", "line", "dm me", "message seller"]) and contains_any(text, ["pay", "transfer", "deposit"]):
             signals.append(Signal(
@@ -504,6 +535,79 @@ class KosongPhucsAgent:
             f"and decision {decision}. Key evidence: {signal_text}."
         )
 
+    def _device_timeline(
+        self,
+        context: dict[str, Any],
+        signals: list[Signal],
+        decision: str,
+    ) -> list[dict[str, str]]:
+        timeline: list[dict[str, str]] = []
+        for event in context["recent_events"]:
+            timeline.append({
+                "stage": "Device event",
+                "detail": event.replace("_", " ").title(),
+            })
+        if context["current_url"]:
+            timeline.append({
+                "stage": "Navigation",
+                "detail": f"User is on {context['current_url']}",
+            })
+        if context["payment_amount_usd"] > 0:
+            timeline.append({
+                "stage": "Payment intent",
+                "detail": f"Detected payment amount ${context['payment_amount_usd']}",
+            })
+        for signal in sorted(signals, key=lambda item: item.weight, reverse=True)[:4]:
+            if signal.weight > 0:
+                timeline.append({
+                    "stage": signal.pattern,
+                    "detail": f"{signal.name}: {signal.evidence}",
+                })
+        timeline.append({
+            "stage": "Autonomous action",
+            "detail": f"Decision: {decision.replace('_', ' ')}",
+        })
+        return timeline
+
+    def _customer_message(self, decision: str, signals: list[Signal], context: dict[str, Any]) -> str:
+        if decision in {"block_payment", "freeze_session"}:
+            return (
+                "We blocked this payment because the screen shows scam indicators: "
+                f"{customer_signal_summary(signals)}. Do not share OTPs or pay outside the "
+                "platform. Stay in the official checkout and contact support if you still want this order reviewed."
+            )
+        if decision == "warn_and_step_up":
+            return (
+                "This payment looks risky. Keep payment inside the official platform, do not share verification codes, "
+                "and verify the seller before continuing."
+            )
+        if decision == "monitor":
+            return "This flow has mild risk. Continue only if the URL, seller, and payment method are expected."
+        return "No strong scam indicators were found. Continue using normal buyer-safety checks."
+
+    def _reviewer_packet(
+        self,
+        context: dict[str, Any],
+        risk_score: int,
+        confidence: float,
+        decision: str,
+        signals: list[Signal],
+        resolution: list[str],
+    ) -> dict[str, Any]:
+        positive_signals = [signal for signal in sorted(signals, key=lambda item: item.weight, reverse=True) if signal.weight > 0]
+        return {
+            "summary": f"{context['session_id']} scored {risk_score}/100 with decision {decision}.",
+            "country": context["country"],
+            "app": context["app_name"],
+            "url": context["current_url"] or "not provided",
+            "amount_usd": context["payment_amount_usd"],
+            "confidence": confidence,
+            "top_evidence": [f"{signal.name}: {signal.evidence}" for signal in positive_signals[:5]],
+            "recommended_actions": resolution,
+            "reviewer_question": reviewer_question(decision),
+            "customer_safe_message": self._customer_message(decision, signals, context),
+        }
+
 
 def recent(hours: Any, window: int) -> bool:
     return hours is not None and hours <= window
@@ -560,6 +664,75 @@ def trusted_url(url: str) -> bool:
         "adyen.",
     ]
     return any(domain in url for domain in trusted_domains)
+
+
+def sea_pattern_pack(country: str) -> dict[str, Any]:
+    packs = {
+        "SG": {
+            "country": "Singapore",
+            "payment_rails": ["PayNow", "PayLah", "FAST transfer"],
+            "scam_terms": ["Carousell", "refund wallet", "delivery release", "Singpass"],
+            "primary_risk": "PayNow or marketplace impersonation scam",
+            "safe_instruction": "Keep payment inside the marketplace or official checkout; never share OTP or Singpass codes.",
+        },
+        "MY": {
+            "country": "Malaysia",
+            "payment_rails": ["DuitNow", "Touch n Go", "FPX"],
+            "scam_terms": ["mule account", "unlock fee", "courier fee"],
+            "primary_risk": "DuitNow transfer or mule-account scam",
+            "safe_instruction": "Verify merchant identity and avoid direct transfers to personal accounts.",
+        },
+        "PH": {
+            "country": "Philippines",
+            "payment_rails": ["GCash", "Maya", "bank transfer"],
+            "scam_terms": ["reservation fee", "COD failed", "rider fee"],
+            "primary_risk": "GCash/Maya seller scam or COD abuse",
+            "safe_instruction": "Use protected checkout and confirm seller reputation before sending wallet funds.",
+        },
+        "ID": {
+            "country": "Indonesia",
+            "payment_rails": ["QRIS", "OVO", "DANA", "GoPay"],
+            "scam_terms": ["admin fee", "refund link", "WhatsApp seller"],
+            "primary_risk": "QRIS or wallet social-commerce scam",
+            "safe_instruction": "Avoid WhatsApp payment redirects and verify QRIS merchant identity.",
+        },
+        "TH": {
+            "country": "Thailand",
+            "payment_rails": ["PromptPay", "TrueMoney", "bank transfer"],
+            "scam_terms": ["deposit", "delivery agent", "refund code"],
+            "primary_risk": "PromptPay transfer or social seller scam",
+            "safe_instruction": "Confirm payment recipient and avoid seller-provided verification links.",
+        },
+        "VN": {
+            "country": "Vietnam",
+            "payment_rails": ["MoMo", "ZaloPay", "bank transfer"],
+            "scam_terms": ["shipping fee", "deposit", "verification link"],
+            "primary_risk": "Wallet transfer or fake logistics scam",
+            "safe_instruction": "Do not pay extra logistics or verification fees outside the platform.",
+        },
+    }
+    return packs.get(country.upper(), {
+        "country": country.upper() or "SEA",
+        "payment_rails": ["bank transfer", "wallet", "QR payment"],
+        "scam_terms": ["deposit", "refund link", "verification code"],
+        "primary_risk": "Regional instant-payment scam",
+        "safe_instruction": "Keep payment inside a protected checkout and do not share OTPs.",
+    })
+
+
+def customer_signal_summary(signals: list[Signal]) -> str:
+    names = [signal.name for signal in sorted(signals, key=lambda item: item.weight, reverse=True) if signal.weight > 0]
+    return ", ".join(names[:3]) if names else "unusual payment and device behavior"
+
+
+def reviewer_question(decision: str) -> str:
+    if decision == "freeze_session":
+        return "Confirm whether account recovery and device-login evidence indicate takeover before restoring access."
+    if decision == "block_payment":
+        return "Confirm whether the blocked payment recipient is a legitimate merchant or a mule account."
+    if decision == "warn_and_step_up":
+        return "Review if the user continued toward off-platform payment after the warning."
+    return "Review only if later telemetry adds stronger scam evidence."
 
 
 def sample_device_payload() -> dict[str, Any]:
@@ -725,6 +898,14 @@ def render_dashboard() -> str:
       cursor: pointer;
     }
     .hint { color: var(--muted); font-size: 14px; line-height: 1.45; margin-top: 8px; }
+    .button-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .secondary { border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); padding: 11px 14px; font-weight: 800; cursor: pointer; }
+    .message { border-left: 4px solid var(--red); background: #fff7f6; padding: 14px; border-radius: 8px; line-height: 1.5; }
+    .timeline { display: grid; gap: 10px; }
+    .timeline-step { border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: #fbfcfb; }
+    .timeline-step strong { display: block; margin-bottom: 4px; }
+    .packet { display: grid; gap: 8px; }
+    .packet-row { border-bottom: 1px solid var(--line); padding-bottom: 8px; line-height: 1.45; }
     @media (max-width: 840px) {
       main { grid-template-columns: 1fr; }
       .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -751,10 +932,14 @@ def render_dashboard() -> str:
     <div class="device-grid">
       <div>
         <input id="deviceApp" value="WhatsApp" aria-label="App name">
+        <input id="deviceCountry" value="SG" aria-label="Country code">
         <input id="deviceUrl" value="https://sg-paynow-verify.example.com/refund" aria-label="Current URL">
         <input id="deviceAmount" value="680" aria-label="Payment amount">
         <textarea id="deviceText" aria-label="Visible device UI text">Seller: Your order is held. PayNow transfer required within 10 minutes to release order. Send me the OTP verification code after payment. Use this refund wallet link: https://sg-paynow-verify.example.com/refund</textarea>
-        <button class="primary" id="analyzeDevice">Analyze Device UI</button>
+        <div class="button-row">
+          <button class="primary" id="analyzeDevice">Analyze Device UI</button>
+          <button class="secondary" id="runRescueDemo">Run Scam Rescue Demo</button>
+        </div>
         <p class="hint">Simulates a mobile app, browser extension, or checkout wrapper sending visible UI text, current URL, payment amount, and device events into the agent.</p>
       </div>
       <div id="deviceResult" class="brief">Device assessment will appear here.</div>
@@ -779,7 +964,7 @@ def render_dashboard() -> str:
       casesEl.innerHTML = investigations.map(item => `
         <button class="case-button ${item.case_id === activeId ? "active" : ""}" data-id="${item.case_id}">
           <span class="case-id">${item.case_id}</span>
-          <span class="case-meta">${item.case.country} · ${item.case.payment_method} · $${item.case.order_value_usd}</span>
+          <span class="case-meta">${item.case.country} &middot; ${item.case.payment_method} &middot; $${item.case.order_value_usd}</span>
         </button>
       `).join("");
       for (const button of casesEl.querySelectorAll("button")) {
@@ -823,8 +1008,22 @@ def render_dashboard() -> str:
           <div class="metric"><div class="label">Session</div><div class="value">${item.session_id}</div></div>
         </div>
         <div class="brief">${item.evidence_brief}</div>
+        <h2>Customer Warning</h2>
+        <div class="message">${item.customer_message}</div>
+        <h2>SEA Pattern Pack</h2>
+        <div class="brief"><strong>${item.country_pack.country}</strong>: ${item.country_pack.primary_risk}<br>${item.country_pack.safe_instruction}</div>
+        <h2>Rescue Timeline</h2>
+        <div class="timeline">
+          ${item.timeline.map(step => `<div class="timeline-step"><strong>${step.stage}</strong><span>${step.detail}</span></div>`).join("")}
+        </div>
         <h2>Device Actions</h2>
         <ul class="actions">${item.resolution.map(action => `<li>${action}</li>`).join("")}</ul>
+        <h2>Human Escalation Packet</h2>
+        <div class="packet">
+          <div class="packet-row"><strong>Summary:</strong> ${item.reviewer_packet.summary}</div>
+          <div class="packet-row"><strong>Reviewer question:</strong> ${item.reviewer_packet.reviewer_question}</div>
+          <div class="packet-row"><strong>Top evidence:</strong> ${item.reviewer_packet.top_evidence.join("; ")}</div>
+        </div>
         <h2>Detected UI Signals</h2>
         <div class="signals">
           ${item.signals.sort((a, b) => b.weight - a.weight).map(signal => `
@@ -837,14 +1036,13 @@ def render_dashboard() -> str:
         </div>
       `;
     }
-
     document.querySelector("#analyzeDevice").addEventListener("click", () => {
       fetch("/api/device-ui", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           session_id: "DEVICE-LIVE-001",
-          country: "SG",
+          country: document.querySelector("#deviceCountry").value || "SG",
           app_name: document.querySelector("#deviceApp").value,
           current_url: document.querySelector("#deviceUrl").value,
           payment_amount_usd: Number(document.querySelector("#deviceAmount").value || 0),
@@ -859,6 +1057,14 @@ def render_dashboard() -> str:
         });
     });
 
+    document.querySelector("#runRescueDemo").addEventListener("click", () => {
+      fetch("/api/device-demo")
+        .then(response => response.json())
+        .then(renderDeviceAssessment)
+        .catch(error => {
+          document.querySelector("#deviceResult").textContent = `Could not run rescue demo: ${error}`;
+        });
+    });
     fetch("/api/batch")
       .then(response => response.json())
       .then(data => {
@@ -944,10 +1150,21 @@ def print_investigation(investigation: Investigation) -> None:
 def print_device_assessment(assessment: DeviceAssessment) -> None:
     print(f"\n{assessment.session_id} | {assessment.decision} | UI scam risk {assessment.risk_score}/100 | confidence {int(assessment.confidence * 100)}%")
     print(assessment.evidence_brief)
-    print("Device actions:")
+    print("\nCustomer-safe message:")
+    print(f"  {assessment.customer_message}")
+    print("\nCountry pattern pack:")
+    print(f"  {assessment.country_pack['country']}: {assessment.country_pack['primary_risk']}")
+    print(f"  Safe instruction: {assessment.country_pack['safe_instruction']}")
+    print("\nRescue timeline:")
+    for step in assessment.timeline:
+        print(f"  - {step['stage']}: {step['detail']}")
+    print("\nDevice actions:")
     for action in assessment.resolution:
         print(f"  - {action}")
-    print("Signals:")
+    print("\nReviewer packet:")
+    print(f"  {assessment.reviewer_packet['summary']}")
+    print(f"  Question: {assessment.reviewer_packet['reviewer_question']}")
+    print("\nSignals:")
     for signal in sorted(assessment.signals, key=lambda item: item.weight, reverse=True):
         print(f"  - +{signal.weight} {signal.name}: {signal.evidence} [{signal.pattern}]")
 
@@ -989,3 +1206,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+
+
